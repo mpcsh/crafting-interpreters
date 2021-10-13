@@ -1,0 +1,18 @@
+fun returnClass() {
+	class Cat {
+		init(name, age) {
+			this.name = name;
+			this.age = age;
+		}
+
+		meow() {
+			print("mrowl! I'm " + this.name);
+		}
+	}
+
+	return Cat;
+}
+
+var Cat = returnClass();
+var fish = Cat("Fish", 3);
+fish.meow();

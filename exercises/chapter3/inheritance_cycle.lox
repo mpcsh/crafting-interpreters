@@ -1,0 +1,15 @@
+class Foo < Bar {
+	init(foo) {
+		super.init(foo);
+		print "foo: " + foo;
+	}
+}
+
+class Bar < Foo {
+	init(bar) {
+		super.init(bar);
+		print "bar: " + bar;
+	}
+}
+
+var baz = Foo("baz");
