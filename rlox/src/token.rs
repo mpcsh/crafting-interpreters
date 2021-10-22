@@ -9,13 +9,11 @@ pub enum TokenType {
 	RightBrace,
 	Comma,
 	Dot,
-	Minus,
-	Plus,
 	Semicolon,
 	Slash,
 	Star,
 
-	// comparison operators
+	// operators
 	Bang,
 	BangEqual,
 	Equal,
@@ -24,6 +22,8 @@ pub enum TokenType {
 	GreaterEqual,
 	Less,
 	LessEqual,
+	Minus,
+	Plus,
 
 	// keywords
 	And,

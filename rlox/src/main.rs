@@ -1,5 +1,7 @@
 #![warn(clippy::all)]
 
+mod ast;
+mod ast_printer;
 mod scanner;
 mod token;
 
