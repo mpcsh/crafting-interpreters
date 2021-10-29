@@ -1,24 +1,25 @@
-pub enum Literal {
+#[derive(Debug)]
+pub enum Expr {
 	Identifier(String),
-	String(String),
-	Number(f64),
-	Boolean(bool),
-	Nil,
+	StringLiteral(String),
+	NumberLiteral(f64),
+	BooleanLiteral(bool),
+	NilLiteral,
+	Unary(UnaryOp, Box<Expr>),
+	Binary(Box<Expr>, BinaryOp, Box<Expr>),
+	Grouping(Box<Expr>),
 }
 
-pub enum UnaryOperator {
+#[derive(Debug)]
+pub enum UnaryOp {
 	Negation,
-	Bang,
+	Not,
 }
 
-pub struct Unary {
-	pub operator: UnaryOperator,
-	pub operand: Box<Expr>,
-}
-
-pub enum BinaryOperator {
-	EqualEqual,
-	BangEqual,
+#[derive(Debug)]
+pub enum BinaryOp {
+	Equal,
+	NotEqual,
 	Less,
 	LessEqual,
 	Greater,
@@ -29,42 +30,38 @@ pub enum BinaryOperator {
 	Divide,
 }
 
-pub struct Binary {
-	pub operator: BinaryOperator,
-	pub left: Box<Expr>,
-	pub right: Box<Expr>,
-}
-
-pub struct Grouping {
-	pub expr: Box<Expr>,
-}
-
-pub enum Expr {
-	Literal(Literal),
-	Unary(Unary),
-	Binary(Binary),
-	Grouping(Box<Expr>),
-}
-
 pub trait Acceptor<T> {
-	fn accept(&self, visitor: &mut dyn Visitor<T>) -> T;
+	fn accept<V>(&self, visitor: &mut V) -> T
+	where
+		V: Visitor<T>;
 }
 
 impl<T> Acceptor<T> for Expr {
-	fn accept(&self, visitor: &mut dyn Visitor<T>) -> T {
+	fn accept<V>(&self, visitor: &mut V) -> T
+	where
+		V: Visitor<T>,
+	{
 		use Expr::*;
 		match self {
-			Literal(lit) => visitor.visit_literal(lit),
-			Unary(expr) => visitor.visit_unary(expr),
-			Binary(expr) => visitor.visit_binary(expr),
+			Identifier(id) => visitor.visit_identifier(id),
+			StringLiteral(s) => visitor.visit_string(s),
+			NumberLiteral(n) => visitor.visit_number(n),
+			BooleanLiteral(b) => visitor.visit_boolean(b),
+			NilLiteral => visitor.visit_nil(),
+			Unary(op, expr) => visitor.visit_unary(op, expr),
+			Binary(left, op, right) => visitor.visit_binary(left, op, right),
 			Grouping(expr) => visitor.visit_grouping(expr),
 		}
 	}
 }
 
 pub trait Visitor<T> {
-	fn visit_literal(&mut self, value: &Literal) -> T;
-	fn visit_unary(&mut self, expr: &Unary) -> T;
-	fn visit_binary(&mut self, expr: &Binary) -> T;
+	fn visit_identifier(&mut self, id: &String) -> T;
+	fn visit_string(&mut self, s: &String) -> T;
+	fn visit_number(&mut self, n: &f64) -> T;
+	fn visit_boolean(&mut self, b: &bool) -> T;
+	fn visit_nil(&mut self) -> T;
+	fn visit_unary(&mut self, op: &UnaryOp, expr: &Expr) -> T;
+	fn visit_binary(&mut self, left: &Expr, op: &BinaryOp, right: &Expr) -> T;
 	fn visit_grouping(&mut self, expr: &Expr) -> T;
 }
