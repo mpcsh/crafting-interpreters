@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::token::{
+use super::token::{
 	keyword, SpannedToken,
 	Token::{self, *},
 };
