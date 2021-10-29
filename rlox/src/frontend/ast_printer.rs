@@ -1,4 +1,4 @@
-use crate::ast::{Acceptor, BinaryOp, Expr, UnaryOp, Visitor};
+use super::ast::{Acceptor, BinaryOp, Expr, UnaryOp, Visitor};
 
 impl ToString for UnaryOp {
 	fn to_string(&self) -> String {

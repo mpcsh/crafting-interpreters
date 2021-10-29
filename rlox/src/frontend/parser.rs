@@ -1,14 +1,16 @@
 use std::iter::Peekable;
 use std::vec::IntoIter;
 
-use crate::ast::{BinaryOp, Expr, UnaryOp};
-use crate::token::{SpannedToken, Token};
+use super::ast::{BinaryOp, Expr, UnaryOp};
+use super::token::{SpannedToken, Token};
 
 #[derive(Debug)]
 pub struct ParseError {
 	line: usize,
 	message: String,
 }
+
+type ParseResult<T> = Result<T, ParseError>;
 
 pub struct Parser {
 	tokens: Peekable<IntoIter<SpannedToken>>,
@@ -65,14 +67,14 @@ impl Parser {
 		&mut self,
 		mut parse_operand: P,
 		operators: &Vec<Token>,
-		parse_operator: &T,
+		parse_operator: T,
 	) -> Expr
 	where
 		P: FnMut(&mut Self) -> Expr,
 		T: Fn(Token) -> BinaryOp,
 	{
 		let mut left = parse_operand(self);
-		while let Some(operator) = self.expect(operators).map(parse_operator) {
+		while let Some(operator) = self.expect(operators).map(&parse_operator) {
 			let right = parse_operand(self);
 			left = Expr::Binary(Box::new(left), operator, Box::new(right));
 		}
@@ -83,7 +85,7 @@ impl Parser {
 		self.parse_binary_left(
 			Self::comparison,
 			&vec![Token::EqualEqual, Token::BangEqual],
-			&|token| match token {
+			|token| match token {
 				Token::EqualEqual => BinaryOp::Equal,
 				Token::BangEqual => BinaryOp::NotEqual,
 				_ => unreachable!(),
@@ -100,7 +102,7 @@ impl Parser {
 				Token::Less,
 				Token::LessEqual,
 			],
-			&|token| match token {
+			|token| match token {
 				Token::Greater => BinaryOp::Greater,
 				Token::GreaterEqual => BinaryOp::GreaterEqual,
 				Token::Less => BinaryOp::Less,
@@ -114,7 +116,7 @@ impl Parser {
 		self.parse_binary_left(
 			Self::factor,
 			&vec![Token::Minus, Token::Plus],
-			&|token| match token {
+			|token| match token {
 				Token::Minus => BinaryOp::Subtract,
 				Token::Plus => BinaryOp::Add,
 				_ => unreachable!(),
@@ -126,7 +128,7 @@ impl Parser {
 		self.parse_binary_left(
 			Self::unary,
 			&vec![Token::Slash, Token::Star],
-			&|token| match token {
+			|token| match token {
 				Token::Slash => BinaryOp::Divide,
 				Token::Star => BinaryOp::Multiply,
 				_ => unreachable!(),
