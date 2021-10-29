@@ -1,21 +1,21 @@
-use crate::ast::{Acceptor, Binary, BinaryOperator, Expr, Literal, Unary, UnaryOperator, Visitor};
+use crate::ast::{Acceptor, BinaryOp, Expr, UnaryOp, Visitor};
 
-impl ToString for UnaryOperator {
+impl ToString for UnaryOp {
 	fn to_string(&self) -> String {
-		use UnaryOperator::*;
+		use UnaryOp::*;
 		match self {
 			Negation => "-".to_string(),
-			Bang => "!".to_string(),
+			Not => "!".to_string(),
 		}
 	}
 }
 
-impl ToString for BinaryOperator {
+impl ToString for BinaryOp {
 	fn to_string(&self) -> String {
-		use BinaryOperator::*;
+		use BinaryOp::*;
 		match self {
-			EqualEqual => "-".to_string(),
-			BangEqual => "!=".to_string(),
+			Equal => "-".to_string(),
+			NotEqual => "!=".to_string(),
 			Less => "<".to_string(),
 			LessEqual => "<=".to_string(),
 			Greater => ">".to_string(),
@@ -37,34 +37,32 @@ impl AstPrinter {
 }
 
 impl Visitor<String> for AstPrinter {
-	fn visit_literal(&mut self, value: &Literal) -> String {
-		use Literal::*;
-		match value {
-			Identifier(id) => id.to_string(),
-			String(s) => s.to_string(),
-			Number(n) => n.to_string(),
-			Boolean(b) => b.to_string(),
-			Nil => "nil".to_string(),
-		}
+	fn visit_identifier(&mut self, id: &String) -> String {
+		id.clone()
 	}
-
-	fn visit_unary(&mut self, expr: &Unary) -> String {
-		format!(
-			"({} {})",
-			expr.operator.to_string(),
-			expr.operand.accept(self)
-		)
+	fn visit_string(&mut self, s: &String) -> String {
+		format!("\"{}\"", s)
 	}
-
-	fn visit_binary(&mut self, expr: &Binary) -> String {
+	fn visit_number(&mut self, n: &f64) -> String {
+		n.to_string()
+	}
+	fn visit_boolean(&mut self, b: &bool) -> String {
+		b.to_string()
+	}
+	fn visit_nil(&mut self) -> String {
+		"nil".to_string()
+	}
+	fn visit_unary(&mut self, op: &UnaryOp, expr: &Expr) -> String {
+		format!("({} {})", op.to_string(), expr.accept(self))
+	}
+	fn visit_binary(&mut self, left: &Expr, op: &BinaryOp, right: &Expr) -> String {
 		format!(
 			"({} {} {})",
-			expr.operator.to_string(),
-			expr.left.accept(self),
-			expr.right.accept(self)
+			left.accept(self),
+			op.to_string(),
+			right.accept(self)
 		)
 	}
-
 	fn visit_grouping(&mut self, expr: &Expr) -> String {
 		format!("(group {})", expr.accept(self))
 	}

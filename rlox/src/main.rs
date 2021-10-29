@@ -2,6 +2,7 @@
 
 mod ast;
 mod ast_printer;
+mod parser;
 mod scanner;
 mod token;
 

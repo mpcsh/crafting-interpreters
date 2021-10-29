@@ -2,8 +2,8 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 use crate::token::{
-	keyword, Token,
-	TokenType::{self, *},
+	keyword, SpannedToken,
+	Token::{self, *},
 };
 
 #[derive(Debug)]
@@ -37,14 +37,14 @@ impl Scanner {
 		}
 	}
 
-	pub fn scan_tokens(&mut self) -> Vec<Token> {
+	pub fn scan_tokens(&mut self) -> Vec<SpannedToken> {
 		let mut tokens = vec![];
 		loop {
 			self.start = self.current;
 			let token = self.scan_token();
 			match token {
 				Some(End) => return tokens,
-				Some(token) => tokens.push(Token {
+				Some(token) => tokens.push(SpannedToken {
 					token,
 					lexeme: self.source_text[self.start..self.current].to_string(),
 					line: self.line,
@@ -54,7 +54,7 @@ impl Scanner {
 		}
 	}
 
-	fn scan_token(&mut self) -> Option<TokenType> {
+	fn scan_token(&mut self) -> Option<Token> {
 		match self.next() {
 			// single-character tokens
 			Some('(') => Some(LeftParen),
@@ -70,7 +70,7 @@ impl Scanner {
 
 			// tokens that depend on one character of lookahead
 			Some('!') => self.one_or_two('=', Bang, BangEqual),
-			Some('=') => self.one_or_two('=', Equal, EqualEqual),
+			Some('=') => self.one_or_two('=', Equal, Equal),
 			Some('<') => self.one_or_two('=', Less, LessEqual),
 			Some('>') => self.one_or_two('=', Greater, GreaterEqual),
 
@@ -114,7 +114,7 @@ impl Scanner {
 			Some('/') => match self.peek() {
 				Some('/') => {
 					while self.peek() != Some('\n') {
-						self.skip();
+						self.next();
 					}
 					None
 				}
@@ -148,11 +148,6 @@ impl Scanner {
 		self.source.peek().cloned()
 	}
 
-	fn skip(&mut self) {
-		self.current += 1;
-		self.source.next();
-	}
-
 	fn take_while<F>(&mut self, mut pred: F) -> Vec<char>
 	where
 		F: FnMut(&char) -> bool,
@@ -163,7 +158,7 @@ impl Scanner {
 				None => return lexeme,
 				Some(c) => {
 					if pred(&c) {
-						self.skip();
+						self.next();
 						lexeme.push(c);
 					} else {
 						return lexeme;
@@ -173,30 +168,25 @@ impl Scanner {
 		}
 	}
 
-	fn expect(&mut self, expected: char, to_emit: Option<TokenType>) -> Option<TokenType> {
+	fn expect(&mut self, expected: char, to_emit: Option<Token>) -> Option<Token> {
 		match self.peek() {
 			None => {
 				self.emit_error(format!("Expected {}, found EOF", expected));
 				None
 			}
 			Some(c) if c == expected => {
-				self.skip();
+				self.next();
 				to_emit
 			}
 			Some(c) => {
-				self.skip();
+				self.next();
 				self.emit_error(format!("Expected {}, found {}", expected, c));
 				None
 			}
 		}
 	}
 
-	fn one_or_two(
-		&mut self,
-		second: char,
-		absent: TokenType,
-		present: TokenType,
-	) -> Option<TokenType> {
+	fn one_or_two(&mut self, second: char, absent: Token, present: Token) -> Option<Token> {
 		self.expect(second, Some(present)).or(Some(absent))
 	}
 

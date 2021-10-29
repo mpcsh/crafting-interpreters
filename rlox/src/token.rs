@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
-#[derive(Debug)]
-pub enum TokenType {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Token {
 	// delimiters
 	LeftParen,
 	RightParen,
@@ -53,8 +53,8 @@ pub enum TokenType {
 	End,
 }
 
-pub fn keyword(identifier: &str) -> Option<TokenType> {
-	use TokenType::*;
+pub fn keyword(identifier: &str) -> Option<Token> {
+	use Token::*;
 	match identifier {
 		"and" => Some(And),
 		"class" => Some(Class),
@@ -76,9 +76,9 @@ pub fn keyword(identifier: &str) -> Option<TokenType> {
 	}
 }
 
-#[derive(Debug)]
-pub struct Token {
-	pub token: TokenType,
+#[derive(Clone, Debug)]
+pub struct SpannedToken {
+	pub token: Token,
 	pub lexeme: String,
 	pub line: usize,
 }
