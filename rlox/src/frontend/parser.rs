@@ -2,20 +2,17 @@ use std::iter::Peekable;
 use std::vec::IntoIter;
 
 use super::ast::{BinaryOp, Expr, UnaryOp};
+use super::parse_error::ParseError::{self, *};
+use super::spanned::Spanned;
 use super::token::{SpannedToken, Token};
 
-#[derive(Debug)]
-pub struct ParseError {
-	line: usize,
-	message: String,
-}
-
-type ParseResult<T> = Result<T, ParseError>;
+type ParseResult<T> = Result<T, Spanned<ParseError>>;
 
 pub struct Parser {
 	tokens: Peekable<IntoIter<SpannedToken>>,
-	errors: Vec<ParseError>,
+	errors: Vec<Spanned<ParseError>>,
 	line: usize,
+	column: usize,
 }
 
 impl Parser {
@@ -24,8 +21,62 @@ impl Parser {
 			tokens: tokens.into_iter().peekable(),
 			errors: vec![],
 			line: 1,
+			column: 1,
 		}
 	}
+
+	// ===========================================================================
+	// entry point
+	// ===========================================================================
+
+	pub fn parse(&mut self) -> Option<Expr> {
+		match self.expression() {
+			Ok(expr) => {
+				dbg!(&self.tokens);
+				dbg!(expr);
+			}
+			Err(err) => {
+				dbg!(&self.tokens);
+				dbg!(err);
+			}
+		}
+		None
+		// self.expression().ok()
+	}
+
+	// ===========================================================================
+	// error handling
+	// ===========================================================================
+
+	fn spanned_error<T>(&mut self, error: ParseError) -> ParseResult<T> {
+		let err = Spanned::<ParseError> {
+			item: error,
+			line: self.line,
+			column: self.column,
+		};
+		self.errors.push(err.clone());
+		Err(err)
+	}
+
+	fn synchronize(&mut self) {
+		use Token::*;
+		while let Some(head) = self.peek() {
+			match head {
+				Semicolon => {
+					self.next();
+					return;
+				}
+				Class | For | Fun | If | Print | Return | Var | While => return,
+				_ => {
+					self.next();
+				}
+			}
+		}
+	}
+
+	// ===========================================================================
+	// iterator helpers
+	// ===========================================================================
 
 	fn next(&mut self) -> Option<Token> {
 		self.tokens.next().map(|span| {
@@ -38,135 +89,126 @@ impl Parser {
 		self.tokens.peek().map(|span| span.token.clone())
 	}
 
-	fn expect(&mut self, tokens: &Vec<Token>) -> Option<Token> {
-		match self.peek() {
-			Some(token) if tokens.contains(&token) => {
-				self.next();
-				Some(token)
-			}
-			Some(_) => None,
-			None => {
-				self.emit_error(format!("Unexpected EOF while searching for {:?}", tokens));
-				None
-			}
+	fn eat(&mut self, expected: Token) -> ParseResult<()> {
+		match self.next() {
+			Some(received) if received == expected => Ok(()),
+			Some(received) => self.spanned_error(ExpectedToken(expected, Some(received))),
+			None => self.spanned_error(UnexpectedEOF(Some(expected))),
 		}
 	}
 
-	fn emit_error(&mut self, message: String) {
-		self.errors.push(ParseError {
-			line: self.line,
-			message,
-		})
+	fn try_eat_one_of(&mut self, tokens: &[Token]) -> ParseResult<Option<Token>> {
+		let head = self.peek();
+		for expected in tokens {
+			match head {
+				Some(received) if received == *expected => {
+					self.next();
+					return Ok(Some(received));
+				}
+				_ => {
+					continue;
+				}
+			}
+		}
+
+		// self.spanned_error(ExpectedOneOf(tokens.to_vec(), head))
+		Ok(None)
 	}
 
-	fn expression(&mut self) -> Expr {
+	// ===========================================================================
+	// parser helpers
+	// ===========================================================================
+
+	fn parse_binary_left<P>(&mut self, mut parse_operand: P, operators: &[Token]) -> ParseResult<Expr>
+	where
+		P: FnMut(&mut Self) -> ParseResult<Expr>,
+	{
+		fn parse_operator(token: Token) -> BinaryOp {
+			match token {
+				Token::EqualEqual => BinaryOp::Equal,
+				Token::BangEqual => BinaryOp::NotEqual,
+				Token::Greater => BinaryOp::Greater,
+				Token::GreaterEqual => BinaryOp::GreaterEqual,
+				Token::Less => BinaryOp::Less,
+				Token::LessEqual => BinaryOp::LessEqual,
+				Token::Minus => BinaryOp::Subtract,
+				Token::Plus => BinaryOp::Add,
+				Token::Slash => BinaryOp::Divide,
+				Token::Star => BinaryOp::Multiply,
+				_ => unreachable!(),
+			}
+		}
+		let mut left = parse_operand(self)?;
+		while let Some(operator) = self.try_eat_one_of(operators)?.map(&parse_operator) {
+			let right = parse_operand(self)?;
+			left = Expr::Binary(Box::new(left), operator, Box::new(right));
+		}
+		Ok(left)
+	}
+
+	// ===========================================================================
+	// expression parsers
+	// ===========================================================================
+
+	fn expression(&mut self) -> ParseResult<Expr> {
 		self.equality()
 	}
 
-	fn parse_binary_left<P, T>(
-		&mut self,
-		mut parse_operand: P,
-		operators: &Vec<Token>,
-		parse_operator: T,
-	) -> Expr
-	where
-		P: FnMut(&mut Self) -> Expr,
-		T: Fn(Token) -> BinaryOp,
-	{
-		let mut left = parse_operand(self);
-		while let Some(operator) = self.expect(operators).map(&parse_operator) {
-			let right = parse_operand(self);
-			left = Expr::Binary(Box::new(left), operator, Box::new(right));
-		}
-		left
+	fn equality(&mut self) -> ParseResult<Expr> {
+		self.parse_binary_left(Self::comparison, &[Token::EqualEqual, Token::BangEqual])
 	}
 
-	fn equality(&mut self) -> Expr {
-		self.parse_binary_left(
-			Self::comparison,
-			&vec![Token::EqualEqual, Token::BangEqual],
-			|token| match token {
-				Token::EqualEqual => BinaryOp::Equal,
-				Token::BangEqual => BinaryOp::NotEqual,
-				_ => unreachable!(),
-			},
-		)
-	}
-
-	fn comparison(&mut self) -> Expr {
+	fn comparison(&mut self) -> ParseResult<Expr> {
 		self.parse_binary_left(
 			Self::term,
-			&vec![
+			&[
 				Token::Greater,
 				Token::GreaterEqual,
 				Token::Less,
 				Token::LessEqual,
 			],
-			|token| match token {
-				Token::Greater => BinaryOp::Greater,
-				Token::GreaterEqual => BinaryOp::GreaterEqual,
-				Token::Less => BinaryOp::Less,
-				Token::LessEqual => BinaryOp::LessEqual,
-				_ => unreachable!(),
-			},
 		)
 	}
 
-	fn term(&mut self) -> Expr {
-		self.parse_binary_left(
-			Self::factor,
-			&vec![Token::Minus, Token::Plus],
-			|token| match token {
-				Token::Minus => BinaryOp::Subtract,
-				Token::Plus => BinaryOp::Add,
-				_ => unreachable!(),
-			},
-		)
+	fn term(&mut self) -> ParseResult<Expr> {
+		self.parse_binary_left(Self::factor, &[Token::Minus, Token::Plus])
 	}
 
-	fn factor(&mut self) -> Expr {
-		self.parse_binary_left(
-			Self::unary,
-			&vec![Token::Slash, Token::Star],
-			|token| match token {
-				Token::Slash => BinaryOp::Divide,
-				Token::Star => BinaryOp::Multiply,
-				_ => unreachable!(),
-			},
-		)
+	fn factor(&mut self) -> ParseResult<Expr> {
+		self.parse_binary_left(Self::unary, &[Token::Slash, Token::Star])
 	}
 
-	fn unary(&mut self) -> Expr {
+	fn unary(&mut self) -> ParseResult<Expr> {
 		let parse_operator = &|token| match token {
 			Token::Bang => UnaryOp::Not,
 			Token::Minus => UnaryOp::Negation,
 			_ => unreachable!(),
 		};
 		if let Some(operator) = self
-			.expect(&vec![Token::Bang, Token::Minus])
+			.try_eat_one_of(&[Token::Bang, Token::Minus])?
 			.map(parse_operator)
 		{
-			let right = self.unary();
-			return Expr::Unary(operator, Box::new(right));
+			let right = self.unary()?;
+			return Ok(Expr::Unary(operator, Box::new(right)));
 		}
 
 		self.primary()
 	}
 
-	fn primary(&mut self) -> Expr {
-		match self.peek() {
-			Some(Token::False) => Expr::BooleanLiteral(false),
-			Some(Token::True) => Expr::BooleanLiteral(true),
-			Some(Token::Nil) => Expr::NilLiteral,
-			Some(Token::NumberLiteral(n)) => Expr::NumberLiteral(n),
-			Some(Token::StringLiteral(s)) => Expr::StringLiteral(s),
+	fn primary(&mut self) -> ParseResult<Expr> {
+		match self.next() {
+			Some(Token::False) => Ok(Expr::BooleanLiteral(false)),
+			Some(Token::True) => Ok(Expr::BooleanLiteral(true)),
+			Some(Token::Nil) => Ok(Expr::NilLiteral),
+			Some(Token::NumberLiteral(n)) => Ok(Expr::NumberLiteral(n)),
+			Some(Token::StringLiteral(s)) => Ok(Expr::StringLiteral(s)),
 			Some(Token::LeftParen) => {
-				let expr = self.expression();
-				self.expect(&vec![Token::RightParen]);
-				Expr::Grouping(Box::new(expr))
+				let expr = self.expression()?;
+				self.eat(Token::RightParen)?;
+				Ok(Expr::Grouping(Box::new(expr)))
 			}
-			Some(_) => unreachable!(),
-			None => unimplemented!(),
+			Some(head) => self.spanned_error(InvalidExpressionStart(head)),
+			None => self.spanned_error(UnexpectedEOF(None)),
 		}
 	}
 }
