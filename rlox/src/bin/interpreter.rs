@@ -6,10 +6,18 @@ use std::{
 
 extern crate rlox;
 
+use rlox::frontend::ast_printer::AstPrinter;
+use rlox::frontend::parser::Parser;
 use rlox::frontend::scanner::Scanner;
 
 pub struct Lox {
 	had_error: bool,
+}
+
+impl Default for Lox {
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl Lox {
@@ -43,19 +51,26 @@ impl Lox {
 	}
 
 	fn run(&mut self, chars: String) {
+		// scan
 		let mut scanner = Scanner::new(chars);
 		let tokens = scanner.scan_tokens();
-		println!("{:?}", tokens);
+
+		// parse
+		let mut parser = Parser::new(tokens);
+		if let Some(ast) = parser.parse() {
+			let mut printer = AstPrinter::default();
+			println!("{:?}", printer.unparse(&ast));
+		}
 	}
 
-	fn error(&mut self, line: usize, message: String) {
-		self.report(line, "".to_string(), message);
-	}
+	// 	fn error(&mut self, line: usize, message: String) {
+	// 		self.report(line, "".to_string(), message);
+	// 	}
 
-	fn report(&mut self, line: usize, location: String, message: String) {
-		println!("[line {}] Error {}: {}", line, location, message);
-		self.had_error = true;
-	}
+	// 	fn report(&mut self, line: usize, location: String, message: String) {
+	// 		println!("[line {}] Error {}: {}", line, location, message);
+	// 		self.had_error = true;
+	// 	}
 }
 
 fn main() -> io::Result<()> {

@@ -30,7 +30,17 @@ impl ToString for BinaryOp {
 
 pub struct AstPrinter;
 
+impl Default for AstPrinter {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl AstPrinter {
+	pub fn new() -> Self {
+		AstPrinter {}
+	}
+
 	pub fn unparse(&mut self, expr: &Expr) -> String {
 		expr.accept(self)
 	}
@@ -60,7 +70,7 @@ impl Visitor<String> for AstPrinter {
 			"({} {} {})",
 			left.accept(self),
 			op.to_string(),
-			right.accept(self)
+			right.accept(self),
 		)
 	}
 	fn visit_grouping(&mut self, expr: &Expr) -> String {
